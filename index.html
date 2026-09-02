@@ -1,9 +1,972 @@
-<GenerateWidget height="600px">
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>たのしい！にほんご さくぶん パズル</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Kosugi+Maru&display=swap');
+    
+    body {
+      font-family: 'Kosugi Maru', sans-serif;
+      background-color: #f0fdf4;
+      touch-action: manipulation;
+    }
 
-```json
-{
-  "widgetSpec": {
-    "height": "600px",
-    "prompt": "**Objective:** Provide the updated, fully functioning Japanese sentence puzzle app code incorporating 10 complete questions, timer/score/high-score functionality, and clear, detailed vector illustrations (SVG scenes with backgrounds, characters, and expressive action frames).\n\n**Data State:**\n- 10 interactive questions with complete Japanese sentences (e.g., らいおん/うさぎ, バス/がっこう, いぬ/ごはん, ねこ/さかな, くま/はちみつ, とり/そら, でんしゃ/えき, こども/ブランコ, ほん/としょかん, ケーキ/おみせ).\n- LocalStorage persistence for high scores and best completion times across Levels 1, 2, and 3.\n- Rich SVG scene renderer generating clear, child-friendly illustrations (e.g. school bus on a road next to a schoolhouse with trees, lion chasing rabbit, boy feeding dog food bowl) and funny alternate frames for swapped particle errors.\n\n**Inputs:**\n- Difficulty selection: Level 1 (Words), Level 2 (Particles), Level 3 (Mixed).\n- Word and particle selection tiles that drop into blank sentence slots.\n- Functional controls: Check Answer ('⭕ たしかめる'), Reset/Clear ('🔄 ぜんけし'), Read Aloud ('📢 ぶんに してみる'), Hint ('💡 ひんと'), Next Question ('つぎへ ➡️').\n\n**Behavior:**\n- Active timer counts seconds during gameplay.\n- Slot choices instantly render the tailored SVG scene representation.\n- Submitting correct answers awards points, triggers celebratory confetti and chimes, and updates local best scores."
-  }
-}
+    .tile-shadow {
+      box-shadow: 0 6px 0 #15803d;
+    }
+    .tile-shadow:active {
+      box-shadow: 0 2px 0 #15803d;
+      transform: translateY(4px);
+    }
+    
+    .particle-shadow {
+      box-shadow: 0 6px 0 #b45309;
+    }
+    .particle-shadow:active {
+      box-shadow: 0 2px 0 #b45309;
+      transform: translateY(4px);
+    }
+
+    .slot-empty {
+      background-image: repeating-linear-gradient(45deg, #e5e7eb, #e5e7eb 10px, #f3f4f6 10px, #f3f4f6 20px);
+    }
+
+    @keyframes popIn {
+      0% { transform: scale(0.8); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .animate-pop {
+      animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-8px); }
+      40%, 80% { transform: translateX(8px); }
+    }
+    .animate-shake {
+      animation: shake 0.4s ease-in-out;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-between p-2 md:p-4 text-gray-800 select-none">
+
+  <!-- ==================== 1. スタート（レベル選択）画面 ==================== -->
+  <div id="screen-start" class="w-full max-w-xl bg-white rounded-3xl p-6 md:p-8 shadow-xl border-4 border-green-400 my-auto text-center animate-pop">
+    <div class="text-6xl mb-3">🧩</div>
+    <h1 class="text-2xl md:text-3xl font-bold text-green-700 mb-2">にほんご さくぶん パズル</h1>
+    <p class="text-sm md:text-base text-gray-600 mb-6">えにあう ことばを くみたてて ぶんをつくろう！</p>
+
+    <div class="mb-6 space-y-3">
+      <p class="font-bold text-gray-700 text-left">▼ レベルを えらんでね</p>
+      
+      <!-- レベル1 -->
+      <button id="select-lvl-1" onclick="selectStartLevel(1)" class="w-full p-4 rounded-2xl border-4 text-left transition flex items-center justify-between border-green-500 bg-green-50 text-green-900 shadow-md">
+        <div>
+          <div class="font-bold text-lg">レベル 1：たんご パズル</div>
+          <div class="text-xs text-gray-600">「らいおん」「うさぎ」などの 単語を選ぶよ！</div>
+        </div>
+        <span class="text-2xl">🟢</span>
+      </button>
+
+      <!-- レベル2 -->
+      <button id="select-lvl-2" onclick="selectStartLevel(2)" class="w-full p-4 rounded-2xl border-2 text-left transition flex items-center justify-between border-gray-200 bg-gray-50 text-gray-700 hover:bg-green-50">
+        <div>
+          <div class="font-bold text-lg">レベル 2：じょし パズル</div>
+          <div class="text-xs text-gray-600">「が」「を」「に」などの 助詞を選ぶよ！</div>
+        </div>
+        <span class="text-2xl">🟡</span>
+      </button>
+
+      <!-- レベル3 -->
+      <button id="select-lvl-3" onclick="selectStartLevel(3)" class="w-full p-4 rounded-2xl border-2 text-left transition flex items-center justify-between border-gray-200 bg-gray-50 text-gray-700 hover:bg-green-50">
+        <div>
+          <div class="font-bold text-lg">レベル 3：ミックス パズル</div>
+          <div class="text-xs text-gray-600">単語も助詞もぜんぶ自分でえらぶ チャレンジ！</div>
+        </div>
+        <span class="text-2xl">🔴</span>
+      </button>
+    </div>
+
+    <!-- ハイスコア表示 -->
+    <div class="bg-amber-50 border-2 border-amber-300 rounded-2xl p-3 mb-6 flex justify-around text-amber-900 font-bold text-sm">
+      <div>🏆 最高得点: <span id="start-highscore">0</span>点</div>
+      <div>⚡ 最速タイム: <span id="start-besttime">--:--</span></div>
+    </div>
+
+    <button onclick="startGame()" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold text-xl py-4 rounded-2xl border-b-4 border-green-700 active:border-b-0 active:translate-y-1 transition shadow-lg">
+      ▶️ ゲーム スタート！
+    </button>
+  </div>
+
+
+  <!-- ==================== 2. メインプレイ画面 ==================== -->
+  <div id="screen-game" class="w-full max-w-3xl hidden flex-col flex-1 justify-between">
+    <!-- ヘッダー / ステータスバー -->
+    <header class="w-full bg-white rounded-3xl p-3 md:p-4 shadow-md border-4 border-green-400 mb-2 flex flex-wrap justify-between items-center gap-2">
+      <div class="flex items-center gap-2">
+        <span class="text-2xl md:text-3xl">🧩</span>
+        <h1 class="text-lg md:text-xl font-bold text-green-700" id="game-level-title">レベル1</h1>
+      </div>
+
+      <!-- 情報（タイム・スコア） -->
+      <div class="flex items-center gap-3 text-xs md:text-sm font-bold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-2xl">
+        <div>⏱️ <span id="timer-display">00:00</span></div>
+        <div>⭐ <span id="score-display">0</span> てん</div>
+        <div>もんめ: <span id="q-num-display">1</span>/10</div>
+      </div>
+    </header>
+
+    <!-- メインコンテンツ -->
+    <main class="w-full bg-white rounded-3xl p-4 md:p-6 shadow-lg border-4 border-green-300 flex-1 flex flex-col justify-between relative">
+      
+      <!-- 進捗ゲージ -->
+      <div class="w-full bg-gray-200 h-3 rounded-full overflow-hidden mb-3">
+        <div id="progress-bar" class="bg-yellow-400 h-full transition-all duration-300" style="width: 10%;"></div>
+      </div>
+
+      <!-- イラスト描画エリア (Dynamic SVG) -->
+      <div id="scene-container" class="w-full h-44 md:h-60 bg-sky-100 rounded-2xl border-2 border-sky-300 overflow-hidden flex items-center justify-center relative shadow-inner mb-3">
+        <!-- SVG は JS で動的に差し込まれます -->
+      </div>
+
+      <!-- 文章スロット組み立てエリア -->
+      <div class="bg-amber-50 p-3 md:p-4 rounded-2xl border-2 border-amber-200 mb-3">
+        <div class="text-center text-xs md:text-sm text-amber-700 font-bold mb-2">👇 わくの中に ことばを いれてね</div>
+        <div id="sentence-slots" class="flex flex-wrap items-center justify-center gap-2 min-h-[56px]">
+          <!-- 枠スロットが動的生成されます -->
+        </div>
+      </div>
+
+      <!-- 選択肢（単語・助詞タイル） -->
+      <div class="mb-3">
+        <div id="tile-pool" class="flex flex-wrap justify-center gap-2 md:gap-3 min-h-[60px]">
+          <!-- タイルが動的生成されます -->
+        </div>
+      </div>
+
+      <!-- コントロールボタン -->
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+        <button onclick="checkAnswer()" class="col-span-2 md:col-span-1 bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-2 rounded-2xl border-b-4 border-green-700 active:border-b-0 active:translate-y-1 transition text-center flex items-center justify-center gap-1">
+          <span>⭕</span> たしかめる
+        </button>
+        <button onclick="readSentence()" class="bg-blue-400 hover:bg-blue-500 text-white font-bold py-3 px-2 rounded-2xl border-b-4 border-blue-600 active:border-b-0 active:translate-y-1 transition text-center flex items-center justify-center gap-1">
+          <span>📢</span> よむ
+        </button>
+        <button onclick="showHint()" class="bg-amber-400 hover:bg-amber-500 text-white font-bold py-3 px-2 rounded-2xl border-b-4 border-amber-600 active:border-b-0 active:translate-y-1 transition text-center flex items-center justify-center gap-1">
+          <span>💡</span> ひんと
+        </button>
+        <button onclick="resetCurrentQuestion()" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-3 px-2 rounded-2xl border-b-4 border-gray-600 active:border-b-0 active:translate-y-1 transition text-center flex items-center justify-center gap-1">
+          <span>🔄</span> ぜんけし
+        </button>
+        <button id="next-btn" onclick="nextQuestion()" class="col-span-2 md:col-span-1 bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-2 rounded-2xl border-b-4 border-purple-700 active:border-b-0 active:translate-y-1 transition text-center flex items-center justify-center gap-1">
+          つぎへ ➡️
+        </button>
+      </div>
+
+    </main>
+  </div>
+
+
+  <!-- ==================== 3. 結果（リザルト）画面 ==================== -->
+  <div id="screen-result" class="w-full max-w-lg bg-white rounded-3xl p-6 md:p-8 shadow-2xl border-4 border-yellow-400 my-auto text-center hidden animate-pop">
+    <div class="text-6xl mb-2">🎉</div>
+    <h2 class="text-2xl md:text-3xl font-bold text-gray-800 mb-1">ぜんぶ クリア！</h2>
+    <p class="text-gray-600 text-sm mb-6">さいごまで よく がんばったね！</p>
+
+    <!-- 結果カード -->
+    <div class="bg-amber-50 rounded-2xl p-4 border-2 border-amber-200 mb-6 space-y-3">
+      <div class="flex justify-between items-center text-lg font-bold border-b border-amber-200 pb-2">
+        <span class="text-gray-700">⏱️ クリアタイム</span>
+        <span id="result-time" class="text-2xl text-blue-600">00:00</span>
+      </div>
+      <div class="flex justify-between items-center text-lg font-bold border-b border-amber-200 pb-2">
+        <span class="text-gray-700">⭐ 今回のスコア</span>
+        <span id="result-score" class="text-2xl text-green-600">0点</span>
+      </div>
+      <div class="flex justify-between items-center text-base font-bold text-amber-900 pt-1">
+        <span>🏆 さいこうきろく</span>
+        <span id="result-highscore">0点 / --:--</span>
+      </div>
+    </div>
+
+    <button onclick="goToStartScreen()" class="w-full bg-yellow-400 hover:bg-yellow-500 text-yellow-950 font-bold text-lg py-4 rounded-2xl border-b-4 border-yellow-600 active:border-b-0 active:translate-y-1 transition shadow-md">
+      🏠 レベル えらび画面へ もどる
+    </button>
+  </div>
+
+
+  <!-- フッター -->
+  <footer class="mt-2 text-xs text-center text-gray-500">
+    たのしくまなべる にほんご さくぶん パズル &copy; 2026
+  </footer>
+
+  <!-- カスタムモーダル（ヒント / 正解通知） -->
+  <div id="modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+    <div id="modal-content" class="bg-white rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl border-4 border-yellow-400 animate-pop">
+      <h2 id="modal-title" class="text-2xl font-bold text-gray-800 mb-2"></h2>
+      <p id="modal-body" class="text-base text-gray-600 mb-6 whitespace-pre-line"></p>
+      <button onclick="closeModal()" class="w-full bg-yellow-400 hover:bg-yellow-500 text-yellow-950 font-bold py-3 rounded-2xl border-b-4 border-yellow-600 active:border-b-0 active:translate-y-1">
+        OK
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // --- 10個の問題データ ---
+    const QUESTIONS = [
+      {
+        id: 1,
+        subject: "らいおん",
+        object: "うさぎ",
+        verb: "おいかける",
+        particles: ["が", "を"],
+        dummyWords: ["きりん"],
+        dummyParticles: ["に"],
+        bgType: "savanna"
+      },
+      {
+        id: 2,
+        subject: "バス",
+        object: "がっこう",
+        verb: "いく",
+        particles: ["が", "に"],
+        dummyWords: ["でんしゃ"],
+        dummyParticles: ["を"],
+        bgType: "city"
+      },
+      {
+        id: 3,
+        subject: "いぬ",
+        object: "ごはん",
+        verb: "たべる",
+        particles: ["が", "を"],
+        dummyWords: ["ねこ"],
+        dummyParticles: ["で"],
+        bgType: "home"
+      },
+      {
+        id: 4,
+        subject: "ねこ",
+        object: "さかな",
+        verb: "みつめる",
+        particles: ["が", "を"],
+        dummyWords: ["とり"],
+        dummyParticles: ["へ"],
+        bgType: "home"
+      },
+      {
+        id: 5,
+        subject: "くま",
+        object: "はちみつ",
+        verb: "つける",
+        particles: ["が", "に"],
+        dummyWords: ["りす"],
+        dummyParticles: ["を"],
+        bgType: "forest"
+      },
+      {
+        id: 6,
+        subject: "とり",
+        object: "そら",
+        verb: "とぶ",
+        particles: ["が", "を"],
+        dummyWords: ["ちょうちょ"],
+        dummyParticles: ["に"],
+        bgType: "sky"
+      },
+      {
+        id: 7,
+        subject: "でんしゃ",
+        object: "えき",
+        verb: "とまる",
+        particles: ["が", "に"],
+        dummyWords: ["くるま"],
+        dummyParticles: ["で"],
+        bgType: "station"
+      },
+      {
+        id: 8,
+        subject: "こども",
+        object: "ブランコ",
+        verb: "のる",
+        particles: ["が", "に"],
+        dummyWords: ["おとな"],
+        dummyParticles: ["を"],
+        bgType: "park"
+      },
+      {
+        id: 9,
+        subject: "ほん",
+        object: "としょかん",
+        verb: "ある",
+        particles: ["が", "に"],
+        dummyWords: ["ノート"],
+        dummyParticles: ["で"],
+        bgType: "library"
+      },
+      {
+        id: 10,
+        subject: "ケーキ",
+        object: "おみせ",
+        verb: "ならぶ",
+        particles: ["が", "に"],
+        dummyWords: ["パン"],
+        dummyParticles: ["を"],
+        bgType: "shop"
+      }
+    ];
+
+    // ゲームの状態管理
+    let selectedLevel = 1;
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let timerSeconds = 0;
+    let timerInterval = null;
+    let currentAnswerState = [];
+    let availableTiles = [];
+
+    // --- Web Audio API (効果音再生) ---
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+
+    function playSound(type) {
+      if (!audioCtx) audioCtx = new AudioContext();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      const now = audioCtx.currentTime;
+
+      if (type === 'correct') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(523.25, now);
+        osc.frequency.setValueAtTime(659.25, now + 0.1);
+        osc.frequency.setValueAtTime(783.99, now + 0.2);
+        osc.frequency.setValueAtTime(1046.50, now + 0.3);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+        osc.start(now);
+        osc.stop(now + 0.6);
+      } else if (type === 'wrong') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(180, now);
+        osc.frequency.setValueAtTime(140, now + 0.15);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+        osc.start(now);
+        osc.stop(now + 0.4);
+      } else if (type === 'click') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, now);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+        osc.start(now);
+        osc.stop(now + 0.05);
+      }
+    }
+
+    // --- 初期表示 ---
+    window.onload = () => {
+      goToStartScreen();
+    };
+
+    function selectStartLevel(lvl) {
+      playSound('click');
+      selectedLevel = lvl;
+      
+      [1, 2, 3].forEach(i => {
+        const btn = document.getElementById(`select-lvl-${i}`);
+        if (i === lvl) {
+          btn.className = "w-full p-4 rounded-2xl border-4 text-left transition flex items-center justify-between border-green-500 bg-green-50 text-green-900 shadow-md";
+        } else {
+          btn.className = "w-full p-4 rounded-2xl border-2 text-left transition flex items-center justify-between border-gray-200 bg-gray-50 text-gray-700 hover:bg-green-50";
+        }
+      });
+
+      updateStartScreenScores();
+    }
+
+    function updateStartScreenScores() {
+      const savedScore = localStorage.getItem(`jp_puzzle_high_lvl_${selectedLevel}`) || '0';
+      const savedTime = localStorage.getItem(`jp_puzzle_besttime_lvl_${selectedLevel}`);
+      
+      document.getElementById('start-highscore').innerText = savedScore;
+      document.getElementById('start-besttime').innerText = savedTime ? formatTime(savedTime) : '--:--';
+    }
+
+    function goToStartScreen() {
+      clearInterval(timerInterval);
+      document.getElementById('screen-start').classList.remove('hidden');
+      document.getElementById('screen-game').classList.add('hidden');
+      document.getElementById('screen-game').classList.remove('flex');
+      document.getElementById('screen-result').classList.add('hidden');
+      
+      selectStartLevel(selectedLevel);
+    }
+
+    function startGame() {
+      playSound('click');
+      // 画面切り替え
+      document.getElementById('screen-start').classList.add('hidden');
+      document.getElementById('screen-game').classList.remove('hidden');
+      document.getElementById('screen-game').classList.add('flex');
+      document.getElementById('screen-result').classList.add('hidden');
+
+      document.getElementById('game-level-title').innerText = `レベル${selectedLevel}`;
+
+      // ステート初期化
+      currentQuestionIndex = 0;
+      score = 0;
+      timerSeconds = 0;
+      document.getElementById('score-display').innerText = score;
+
+      startTimer();
+      loadQuestion(0);
+    }
+
+    function startTimer() {
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        timerSeconds++;
+        document.getElementById('timer-display').innerText = formatTime(timerSeconds);
+      }, 1000);
+    }
+
+    function formatTime(totalSecs) {
+      const mins = String(Math.floor(totalSecs / 60)).padStart(2, '0');
+      const secs = String(totalSecs % 60).padStart(2, '0');
+      return `${mins}:${secs}`;
+    }
+
+    // --- 問題のセットアップ ---
+    function loadQuestion(index) {
+      currentQuestionIndex = index;
+      const q = QUESTIONS[index];
+      
+      document.getElementById('q-num-display').innerText = index + 1;
+
+      // プログレスバー更新
+      const prog = ((index + 1) / QUESTIONS.length) * 100;
+      document.getElementById('progress-bar').style.width = `${prog}%`;
+
+      // レベルごとの構成決め
+      currentAnswerState = [
+        { type: 'word', key: 'subject', value: selectedLevel === 2 ? q.subject : '', fixed: selectedLevel === 2 },
+        { type: 'particle', key: 'p1', value: selectedLevel === 1 ? q.particles[0] : '', fixed: selectedLevel === 1 },
+        { type: 'word', key: 'object', value: selectedLevel === 2 ? q.object : '', fixed: selectedLevel === 2 },
+        { type: 'particle', key: 'p2', value: selectedLevel === 1 ? q.particles[1] : '', fixed: selectedLevel === 1 },
+        { type: 'word', key: 'verb', value: q.verb, fixed: true }
+      ];
+
+      // タイルプールを生成
+      availableTiles = [];
+
+      if (selectedLevel === 1 || selectedLevel === 3) {
+        availableTiles.push({ id: 'w1', type: 'word', text: q.subject });
+        availableTiles.push({ id: 'w2', type: 'word', text: q.object });
+        q.dummyWords.forEach((dw, i) => {
+          availableTiles.push({ id: `dw${i}`, type: 'word', text: dw });
+        });
+      }
+
+      if (selectedLevel === 2 || selectedLevel === 3) {
+        availableTiles.push({ id: 'p1', type: 'particle', text: q.particles[0] });
+        availableTiles.push({ id: 'p2', type: 'particle', text: q.particles[1] });
+        q.dummyParticles.forEach((dp, i) => {
+          availableTiles.push({ id: `dp${i}`, type: 'particle', text: dp });
+        });
+      }
+
+      availableTiles.sort(() => Math.random() - 0.5);
+
+      renderSlots();
+      renderTiles();
+      renderSVGScene();
+    }
+
+    // --- スロット＆タイルのレンダリング ---
+    function renderSlots() {
+      const slotsContainer = document.getElementById('sentence-slots');
+      slotsContainer.innerHTML = '';
+
+      currentAnswerState.forEach((slot, idx) => {
+        const slotEl = document.createElement('div');
+
+        if (slot.fixed) {
+          slotEl.className = `px-3 py-2 rounded-xl text-lg md:text-xl font-bold ${
+            slot.type === 'particle' ? 'bg-amber-200 text-amber-900 border-2 border-amber-400' : 'bg-green-100 text-green-900 border-2 border-green-300'
+          }`;
+          slotEl.innerText = slot.value;
+        } else {
+          const isFilled = slot.value !== '';
+          slotEl.className = `min-w-[70px] md:min-w-[85px] h-[48px] rounded-2xl flex items-center justify-center font-bold text-base md:text-lg border-2 transition-all cursor-pointer ${
+            isFilled 
+              ? (slot.type === 'particle' ? 'bg-amber-400 text-white border-amber-600 particle-shadow' : 'bg-green-500 text-white border-green-700 tile-shadow') 
+              : 'slot-empty border-dashed border-gray-400 text-gray-400 hover:border-gray-600'
+          }`;
+
+          slotEl.innerText = isFilled ? slot.value : '？';
+
+          if (isFilled) {
+            slotEl.onclick = () => removeTileFromSlot(idx);
+          }
+        }
+
+        slotsContainer.appendChild(slotEl);
+      });
+    }
+
+    function renderTiles() {
+      const poolContainer = document.getElementById('tile-pool');
+      poolContainer.innerHTML = '';
+
+      availableTiles.forEach(tile => {
+        const tileEl = document.createElement('button');
+        const isParticle = tile.type === 'particle';
+        
+        tileEl.className = `px-4 py-2 rounded-2xl text-base md:text-lg font-bold transition-all animate-pop ${
+          isParticle
+            ? 'bg-amber-400 hover:bg-amber-500 text-amber-950 border-2 border-amber-600 particle-shadow'
+            : 'bg-green-500 hover:bg-green-600 text-white border-2 border-green-700 tile-shadow'
+        }`;
+        tileEl.innerText = tile.text;
+        tileEl.onclick = () => selectTile(tile);
+
+        poolContainer.appendChild(tileEl);
+      });
+    }
+
+    // --- タップの操作ロジック ---
+    function selectTile(tile) {
+      playSound('click');
+      const targetSlotIndex = currentAnswerState.findIndex(
+        s => !s.fixed && s.type === tile.type && s.value === ''
+      );
+
+      if (targetSlotIndex !== -1) {
+        currentAnswerState[targetSlotIndex].value = tile.text;
+        const tileIndex = availableTiles.findIndex(t => t.id === tile.id);
+        if (tileIndex !== -1) availableTiles.splice(tileIndex, 1);
+
+        renderSlots();
+        renderTiles();
+        renderSVGScene();
+      }
+    }
+
+    function removeTileFromSlot(slotIndex) {
+      playSound('click');
+      const slot = currentAnswerState[slotIndex];
+      if (slot.fixed || slot.value === '') return;
+
+      availableTiles.push({
+        id: 'returned_' + Date.now(),
+        type: slot.type,
+        text: slot.value
+      });
+
+      slot.value = '';
+
+      renderSlots();
+      renderTiles();
+      renderSVGScene();
+    }
+
+    function resetCurrentQuestion() {
+      playSound('click');
+      loadQuestion(currentQuestionIndex);
+    }
+
+    // --- リアルタイムSVGイラスト描画エンジン ---
+    function renderSVGScene() {
+      const container = document.getElementById('scene-container');
+      const q = QUESTIONS[currentQuestionIndex];
+
+      const subj = currentAnswerState[0].value || q.subject;
+      const p1 = currentAnswerState[1].value || q.particles[0];
+      const obj = currentAnswerState[2].value || q.object;
+      const p2 = currentAnswerState[3].value || q.particles[1];
+
+      const isReversed = (p1 === q.particles[1] && p2 === q.particles[0]);
+
+      let bgSvg = `<rect width="100%" height="100%" fill="#e0f2fe" />
+                   <circle cx="80%" cy="20%" r="30" fill="#fef08a" />`;
+      
+      if (q.bgType === 'savanna' || q.bgType === 'park') {
+        bgSvg += `<path d="M 0,200 Q 150,150 300,200 T 600,200 L 600,300 L 0,300 Z" fill="#86efac" />`;
+      } else if (q.bgType === 'city' || q.bgType === 'station') {
+        bgSvg += `<rect y="180" width="100%" height="120" fill="#94a3b8" />
+                  <line x1="0" y1="230" x2="600" y2="230" stroke="#ffffff" stroke-dasharray="15,15" stroke-width="4" />`;
+      } else if (q.bgType === 'home' || q.bgType === 'library' || q.bgType === 'shop') {
+        bgSvg += `<rect y="170" width="100%" height="130" fill="#fde68a" />
+                  <rect y="0" width="100%" height="170" fill="#fef3c7" />`;
+      } else {
+        bgSvg += `<path d="M 0,180 Q 200,140 400,180 T 600,160 L 600,300 L 0,300 Z" fill="#4ade80" />`;
+      }
+
+      function getCharacterSVG(name, x, y, scale = 1) {
+        let content = '';
+        switch (name) {
+          case 'らいおん':
+            content = `<g transform="translate(${x},${y}) scale(${scale})">
+              <circle cx="0" cy="0" r="38" fill="#d97706" />
+              <circle cx="0" cy="0" r="28" fill="#f59e0b" />
+              <circle cx="-10" cy="-5" r="4" fill="#000"/>
+              <circle cx="10" cy="-5" r="4" fill="#000"/>
+              <ellipse cx="0" cy="5" rx="6" ry="4" fill="#78350f"/>
+              <path d="M -8,10 Q 0,18 8,10" stroke="#78350f" stroke-width="3" fill="none"/>
+            </g>`;
+            break;
+          case 'うさぎ':
+            content = `<g transform="translate(${x},${y}) scale(${scale})">
+              <ellipse cx="-10" cy="-35" rx="6" ry="20" fill="#f472b6" />
+              <ellipse cx="10" cy="-35" rx="6" ry="20" fill="#f472b6" />
+              <circle cx="0" cy="0" r="25" fill="#ffffff" stroke="#f472b6" stroke-width="2" />
+              <circle cx="-8" cy="-5" r="3" fill="#000"/>
+              <circle cx="8" cy="-5" r="3" fill="#000"/>
+              <polygon points="0,2 5,-3 -5,-3" fill="#f472b6"/>
+            </g>`;
+            break;
+          case 'バス':
+            content = `<g transform="translate(${x},${y}) scale(${scale})">
+              <rect x="-50" y="-30" width="100" height="50" rx="10" fill="#ef4444" />
+              <rect x="-40" y="-20" width="30" height="20" fill="#e0f2fe" />
+              <rect x="0" y="-20" width="30" height="20" fill="#e0f2fe" />
+              <circle cx="-30" cy="20" r="10" fill="#334155" />
+              <circle cx="30" cy="20" r="10" fill="#334155" />
+            </g>`;
+            break;
+          case 'がっこう':
+            content = `<g transform="translate(${x},${y}) scale(${scale})">
+              <rect x="-40" y="-30" width="80" height="60" fill="#fbd5a5" stroke="#c2410c" stroke-width="2"/>
+              <polygon points="0,-50 -50,-30 50,-30" fill="#dc2626"/>
+              <rect x="-10" y="10" width="20" height="20" fill="#78350f"/>
+              <text x="0" y="-10" font-size="14" text-anchor="middle" font-weight="bold" fill="#c2410c">🏫</text>
+            </g>`;
+            break;
+          case 'いぬ':
+            content = `<g transform="translate(${x},${y}) scale(${scale})">
+              <ellipse cx="-20" cy="-15" rx="8" ry="15" fill="#b45309" />
+              <ellipse cx="20" cy="-15" rx="8" ry="15" fill="#b45309" />
+              <circle cx="0" cy="0" r="26" fill="#f59e0b" />
+              <circle cx="-8" cy="-5" r="3.5" fill="#000"/>
+              <circle cx="8" cy="-5" r="3.5" fill="#000"/>
+              <ellipse cx="0" cy="3" rx="6" ry="4" fill="#000"/>
+            </g>`;
+            break;
+          case 'ごはん':
+            content = `<g transform="translate(${x},${y}) scale(${scale})">
+              <path d="M -25,0 C -25,25 25,25 25,0 Z" fill="#ef4444" />
+              <ellipse cx="0" cy="0" rx="23" ry="10" fill="#ffffff" />
+            </g>`;
+            break;
+          case 'ねこ':
+            content = `<g transform="translate(${x},${y}) scale(${scale})">
+              <polygon points="-22,-10 -12,-30 -2,-12" fill="#94a3b8"/>
+              <polygon points="22,-10 12,-30 2,-12" fill="#94a3b8"/>
+              <circle cx="0" cy="0" r="24" fill="#cbd5e1"/>
+              <ellipse cx="-7" cy="-4" rx="3" ry="5" fill="#15803d"/>
+              <ellipse cx="7" cy="-4" rx="3" ry="5" fill="#15803d"/>
+              <polygon points="0,2 4,-1 -4,-1" fill="#f472b6"/>
+            </g>`;
+            break;
+          case 'さかな':
+            content = `<g transform="translate(${x},${y}) scale(${scale})">
+              <ellipse cx="0" cy="0" rx="20" ry="12" fill="#3b82f6"/>
+              <polygon points="15,0 30,-10 30,10" fill="#1d4ed8"/>
+              <circle cx="-10" cy="-3" r="2.5" fill="#fff"/>
+              <circle cx="-10" cy="-3" r="1" fill="#000"/>
+            </g>`;
+            break;
+          case 'くま':
+            content = `<g transform="translate(${x},${y}) scale(${scale})">
+              <circle cx="-20" cy="-20" r="10" fill="#b45309" />
+              <circle cx="20" cy="-20" r="10" fill="#b45309" />
+              <circle cx="0" cy="0" r="28" fill="#d97706" />
+              <ellipse cx="0" cy="5" rx="12" ry="8" fill="#fde68a" />
+              <circle cx="-8" cy="-5" r="3" fill="#000"/>
+              <circle cx="8" cy="-5" r="3" fill="#000"/>
+              <ellipse cx="0" cy="3" rx="4" ry="3" fill="#000"/>
+            </g>`;
+            break;
+          case 'はちみつ':
+            content = `<g transform="translate(${x},${y}) scale(${scale})">
+              <rect x="-18" y="-15" width="36" height="35" rx="6" fill="#fbbf24" stroke="#d97706" stroke-width="2"/>
+              <text x="0" y="8" font-size="16" text-anchor="middle">🍯</text>
+            </g>`;
+            break;
+          case 'とり':
+            content = `<g transform="translate(${x},${y}) scale(${scale})">
+              <circle cx="0" cy="0" r="20" fill="#38bdf8" />
+              <polygon points="-5,0 -25,-15 -15,5" fill="#0284c7" />
+              <polygon points="15,-2 25,3 15,8" fill="#f97316" />
+              <circle cx="8" cy="-6" r="3" fill="#fff" />
+              <circle cx="9" cy="-6" r="1.5" fill="#000" />
+            </g>`;
+            break;
+          case 'そら':
+            content = `<g transform="translate(${x},${y}) scale(${scale})">
+              <path d="M -20,0 Q -10,-15 5,-10 Q 20,-20 35,-5 Q 45,10 20,15 Q -10,15 -20,0 Z" fill="#ffffff" opacity="0.9" />
+            </g>`;
+            break;
+          case 'でんしゃ':
+            content = `<g transform="translate(${x},${y}) scale(${scale})">
+              <rect x="-55" y="-25" width="110" height="45" rx="5" fill="#22c55e" />
+              <rect x="-45" y="-15" width="25" height="18" fill="#e0f2fe" />
+              <rect x="-10" y="-15" width="25" height="18" fill="#e0f2fe" />
+              <rect x="20" y="-15" width="25" height="18" fill="#e0f2fe" />
+            </g>`;
+            break;
+          case 'えき':
+            content = `<g transform="translate(${x},${y}) scale(${scale})">
+              <rect x="-30" y="-30" width="60" height="60" fill="#cbd5e1"/>
+              <text x="0" y="5" font-size="20" text-anchor="middle">🚉</text>
+            </g>`;
+            break;
+          case 'こども':
+            content = `<g transform="translate(${x},${y}) scale(${scale})">
+              <circle cx="0" cy="-10" r="18" fill="#fde047"/>
+              <circle cx="0" cy="-10" r="15" fill="#fed7aa"/>
+              <circle cx="-5" cy="-12" r="2" fill="#000"/>
+              <circle cx="5" cy="-12" r="2" fill="#000"/>
+              <path d="M-5,-5 Q0,2 5,-5" stroke="#000" stroke-width="2" fill="none"/>
+              <path d="M -12,8 L 12,8 L 18,30 L -18,30 Z" fill="#3b82f6"/>
+            </g>`;
+            break;
+          case 'ブランコ':
+            content = `<g transform="translate(${x},${y}) scale(${scale})">
+              <line x1="-25" y1="-40" x2="-20" y2="20" stroke="#475569" stroke-width="3"/>
+              <line x1="25" y1="-40" x2="20" y2="20" stroke="#475569" stroke-width="3"/>
+              <rect x="-22" y="15" width="44" height="8" fill="#78350f"/>
+            </g>`;
+            break;
+          case 'ほん':
+            content = `<g transform="translate(${x},${y}) scale(${scale})">
+              <rect x="-20" y="-15" width="40" height="30" rx="3" fill="#a855f7"/>
+              <line x1="0" y1="-15" x2="0" y2="15" stroke="#fff" stroke-width="2"/>
+            </g>`;
+            break;
+          case 'としょかん':
+            content = `<g transform="translate(${x},${y}) scale(${scale})">
+              <rect x="-40" y="-30" width="80" height="60" fill="#f1f5f9" stroke="#64748b" stroke-width="2"/>
+              <text x="0" y="5" font-size="22" text-anchor="middle">📚</text>
+            </g>`;
+            break;
+          case 'ケーキ':
+            content = `<g transform="translate(${x},${y}) scale(${scale})">
+              <path d="M-20,10 L20,10 L15,-15 L-15,-15 Z" fill="#f472b6"/>
+              <circle cx="0" cy="-18" r="5" fill="#ef4444"/>
+            </g>`;
+            break;
+          case 'おみせ':
+            content = `<g transform="translate(${x},${y}) scale(${scale})">
+              <rect x="-35" y="-20" width="70" height="50" fill="#fef08a" stroke="#ca8a04" stroke-width="2"/>
+              <path d="M-40,-20 L40,-20 L35,-35 L-35,-35 Z" fill="#ef4444"/>
+            </g>`;
+            break;
+          default:
+            content = `<g transform="translate(${x},${y}) scale(${scale})">
+              <circle cx="0" cy="0" r="20" fill="#94a3b8"/>
+              <text x="0" y="6" font-size="14" text-anchor="middle" fill="#fff">${name}</text>
+            </g>`;
+        }
+        return content;
+      }
+
+      let mainCharX = isReversed ? 220 : 100;
+      let targetCharX = isReversed ? 100 : 220;
+      let effectSvg = '';
+
+      if (isReversed) {
+        effectSvg = `<g transform="translate(160, 50)">
+          <text font-size="28" font-weight="bold" fill="#ef4444" text-anchor="middle" animate="bounce">⁉️</text>
+        </g>`;
+      }
+
+      const svgHTML = `
+        <svg viewBox="0 0 320 200" class="w-full h-full">
+          ${bgSvg}
+          ${effectSvg}
+          ${getCharacterSVG(subj, mainCharX, 130, 1.1)}
+          ${getCharacterSVG(obj, targetCharX, 130, 0.9)}
+        </svg>
+      `;
+
+      container.innerHTML = svgHTML;
+    }
+
+    // --- 正解判定 & 全問クリアロジック ---
+    function checkAnswer() {
+      const q = QUESTIONS[currentQuestionIndex];
+      const subj = currentAnswerState[0].value;
+      const p1 = currentAnswerState[1].value;
+      const obj = currentAnswerState[2].value;
+      const p2 = currentAnswerState[3].value;
+
+      if (!subj || !p1 || !obj || !p2) {
+        showModal("⚠️ まだ とちゅう だよ", "わくの なかに ことばを ぜんぶ いれてね！");
+        return;
+      }
+
+      const isCorrect = (
+        subj === q.subject &&
+        p1 === q.particles[0] &&
+        obj === q.object &&
+        p2 === q.particles[1]
+      );
+
+      if (isCorrect) {
+        playSound('correct');
+        confetti({
+          particleCount: 80,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+
+        score += 10;
+        document.getElementById('score-display').innerText = score;
+
+        const fullText = `${subj}${p1} ${obj}${p2} ${q.verb}`;
+        speakText(fullText);
+
+        setTimeout(() => {
+          if (currentQuestionIndex < QUESTIONS.length - 1) {
+            showModal("⭕ せいかい！", `「${fullText}」\nすごーい！そのちょうし！`, () => {
+              nextQuestion();
+            });
+          } else {
+            // 10問完了（全問クリア）
+            finishGame();
+          }
+        }, 300);
+
+      } else {
+        playSound('wrong');
+        const container = document.getElementById('sentence-slots');
+        container.classList.add('animate-shake');
+        setTimeout(() => container.classList.remove('animate-shake'), 400);
+
+        if (p1 === q.particles[1] && p2 === q.particles[0]) {
+          showModal("❌ おしい！", "じょし（「が」や「を」）の ばしょが ぎゃくになっているよ！ えを よーく みてね！");
+        } else {
+          showModal("❌ ざんねん！", "もういちど えと つながるように かんがえてみよう！");
+        }
+      }
+    }
+
+    function finishGame() {
+      clearInterval(timerInterval); // タイマー停止
+      playSound('correct');
+
+      // ハイスコア・ベストタイム更新処理
+      const prevHigh = parseInt(localStorage.getItem(`jp_puzzle_high_lvl_${selectedLevel}`) || '0');
+      const prevBestTime = parseInt(localStorage.getItem(`jp_puzzle_besttime_lvl_${selectedLevel}`) || '999999');
+
+      if (score > prevHigh) {
+        localStorage.setItem(`jp_puzzle_high_lvl_${selectedLevel}`, score);
+      }
+      if (timerSeconds < prevBestTime) {
+        localStorage.setItem(`jp_puzzle_besttime_lvl_${selectedLevel}`, timerSeconds);
+      }
+
+      // リザルト画面への反映
+      document.getElementById('result-time').innerText = formatTime(timerSeconds);
+      document.getElementById('result-score').innerText = `${score}点`;
+
+      const bestScore = Math.max(score, prevHigh);
+      const bestTime = Math.min(timerSeconds, prevBestTime);
+      document.getElementById('result-highscore').innerText = `${bestScore}点 / ${formatTime(bestTime)}`;
+
+      // 画面切り替え
+      document.getElementById('screen-game').classList.add('hidden');
+      document.getElementById('screen-game').classList.remove('flex');
+      document.getElementById('screen-result').classList.remove('hidden');
+
+      confetti({
+        particleCount: 150,
+        spread: 100,
+        origin: { y: 0.5 }
+      });
+    }
+
+    function nextQuestion() {
+      playSound('click');
+      if (currentQuestionIndex < QUESTIONS.length - 1) {
+        loadQuestion(currentQuestionIndex + 1);
+      } else {
+        finishGame();
+      }
+    }
+
+    // --- 音声読み上げ ---
+    function readSentence() {
+      playSound('click');
+      const subj = currentAnswerState[0].value || 'なに';
+      const p1 = currentAnswerState[1].value || '';
+      const obj = currentAnswerState[2].value || 'なに';
+      const p2 = currentAnswerState[3].value || '';
+      const verb = currentAnswerState[4].value || '';
+
+      const text = `${subj}${p1} ${obj}${p2} ${verb}`;
+      speakText(text);
+    }
+
+    function speakText(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const uttr = new SpeechSynthesisUtterance(text);
+        uttr.lang = 'ja-JP';
+        uttr.rate = 0.85;
+        uttr.pitch = 1.1;
+        window.speechSynthesis.speak(uttr);
+      }
+    }
+
+    // --- ヒント表示 ---
+    function showHint() {
+      playSound('click');
+      const q = QUESTIONS[currentQuestionIndex];
+      let hintText = "";
+      if (selectedLevel === 1) {
+        hintText = `「${q.subject}」と「${q.object}」を いれてね！`;
+      } else if (selectedLevel === 2) {
+        hintText = `「${q.particles[0]}」と「${q.particles[1]}」の つかいかたを かんがえよう！`;
+      } else {
+        hintText = `こたえの ぶん: 「${q.subject}${q.particles[0]} ${q.object}${q.particles[1]} ${q.verb}」`;
+      }
+      showModal("💡 ひんと", hintText);
+    }
+
+    // --- モーダルダイアログ機能 ---
+    let modalCallback = null;
+
+    function showModal(title, body, onClose = null) {
+      document.getElementById('modal-title').innerText = title;
+      document.getElementById('modal-body').innerText = body;
+      modalCallback = onClose;
+      document.getElementById('modal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      playSound('click');
+      document.getElementById('modal').classList.add('hidden');
+      if (modalCallback) {
+        modalCallback();
+        modalCallback = null;
+      }
+    }
+  </script>
+</body>
+</html>
